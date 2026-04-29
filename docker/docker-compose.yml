@@ -1,4 +1,5 @@
 version: '3.8'
+
 networks:
   agri_net:
     driver: bridge
@@ -11,6 +12,7 @@ services:
       ZOOKEEPER_CLIENT_PORT: 2181
       ZOOKEEPER_TICK_TIME: 2000
     networks: [agri_net]
+    restart: unless-stopped
 
   kafka:
     image: confluentinc/cp-kafka:7.5.0
@@ -23,6 +25,7 @@ services:
       KAFKA_ADVERTISED_LISTENERS: PLAINTEXT://localhost:9092
       KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: 1
     networks: [agri_net]
+    restart: unless-stopped
 
   namenode:
     image: bde2020/hadoop-namenode:2.0.0-hadoop3.2.1-java8
@@ -33,6 +36,7 @@ services:
     volumes:
       - ../data/hdfs/namenode:/hadoop/dfs/name
     networks: [agri_net]
+    restart: unless-stopped
 
   datanode:
     image: bde2020/hadoop-datanode:2.0.0-hadoop3.2.1-java8
@@ -43,6 +47,7 @@ services:
     volumes:
       - ../data/hdfs/datanode:/hadoop/dfs/data
     networks: [agri_net]
+    restart: unless-stopped
 
   hive-metastore:
     image: apache/hive:3.1.3
@@ -51,15 +56,22 @@ services:
     ports: ["10000:10000"]
     environment:
       SERVICE_NAME: metastore
+      HIVE_METASTORE_URI: thrift://hive-metastore:9083
     volumes:
       - ../scripts/hive_setup.sql:/opt/hive/scripts/hive_setup.sql
     networks: [agri_net]
+    restart: unless-stopped
 
   hbase:
-    image: harisekhon/hbase:2.4.9
+    image: dajobe/hbase:latest
     container_name: hbase
     ports: ["16010:16010", "9090:9090"]
+    environment:
+      HBASE_CONF_hbase_zookeeper_quorum: zookeeper
+      HBASE_CONF_hbase_master_port: 16000
+    depends_on: [zookeeper]
     networks: [agri_net]
+    restart: unless-stopped
 
   nifi:
     image: apache/nifi:1.25.0
@@ -71,29 +83,32 @@ services:
     volumes:
       - ../nifi_templates:/opt/nifi/nifi-current/templates
     networks: [agri_net]
+    restart: unless-stopped
 
   spark-master:
-    image: bitnami/spark:3.5.1
+    image: apache/spark:3.5.1
     container_name: spark-master
+    command: /opt/spark/bin/spark-class org.apache.spark.deploy.master.Master -h 0.0.0.0
     environment:
-      SPARK_MODE: master
-      SPARK_MASTER_HOST: spark-master
+      SPARK_NO_DAEMONIZE: "true"
     ports: ["8080:8080", "7077:7077"]
     volumes:
       - ../scripts:/opt/scripts
       - ../models:/opt/models
     networks: [agri_net]
+    restart: unless-stopped
 
   spark-worker:
-    image: bitnami/spark:3.5.1
+    image: apache/spark:3.5.1
     container_name: spark-worker
+    command: /opt/spark/bin/spark-class org.apache.spark.deploy.worker.Worker spark://spark-master:7077
     environment:
-      SPARK_MODE: worker
-      SPARK_MASTER_URL: spark://spark-master:7077
+      SPARK_NO_DAEMONIZE: "true"
     depends_on: [spark-master]
     volumes:
       - ../scripts:/opt/scripts
     networks: [agri_net]
+    restart: unless-stopped
 
   airflow:
     image: apache/airflow:2.7.3
@@ -102,7 +117,10 @@ services:
     ports: ["8082:8080"]
     environment:
       AIRFLOW__CORE__EXECUTOR: LocalExecutor
+      AIRFLOW__CORE__LOAD_EXAMPLES: 'false'
+      AIRFLOW__DATABASE__SQL_ALCHEMY_CONN: sqlite:////opt/airflow/airflow.db
     volumes:
       - ../dags:/opt/airflow/dags
       - ../scripts:/opt/airflow/scripts
     networks: [agri_net]
+    restart: unless-stopped
