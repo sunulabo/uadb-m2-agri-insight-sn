@@ -4,13 +4,16 @@ networks:
   agri_net:
     driver: bridge
 
+volumes:
+  agri_data_volume:
+    external: true
+
 services:
   zookeeper:
     image: confluentinc/cp-zookeeper:7.5.0
     container_name: zookeeper
     environment:
       ZOOKEEPER_CLIENT_PORT: 2181
-      ZOOKEEPER_TICK_TIME: 2000
     networks: [agri_net]
     restart: unless-stopped
 
@@ -23,42 +26,20 @@ services:
       KAFKA_BROKER_ID: 1
       KAFKA_ZOOKEEPER_CONNECT: zookeeper:2181
       KAFKA_ADVERTISED_LISTENERS: PLAINTEXT://localhost:9092
-      KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: 1
     networks: [agri_net]
     restart: unless-stopped
 
-  namenode:
-    image: bde2020/hadoop-namenode:2.0.0-hadoop3.2.1-java8
-    container_name: namenode
-    ports: ["9870:9870", "9000:9000"]
-    environment:
-      CLUSTER_NAME: agri_cluster
-    volumes:
-      - ../data/hdfs/namenode:/hadoop/dfs/name
-    networks: [agri_net]
-    restart: unless-stopped
-
-  datanode:
-    image: bde2020/hadoop-datanode:2.0.0-hadoop3.2.1-java8
-    container_name: datanode
-    depends_on: [namenode]
-    environment:
-      CLUSTER_NAME: agri_cluster
-    volumes:
-      - ../data/hdfs/datanode:/hadoop/dfs/data
-    networks: [agri_net]
-    restart: unless-stopped
-
+  # service Hive Metastore uniquement (pas de HDFS)
   hive-metastore:
     image: apache/hive:3.1.3
     container_name: hive-metastore
-    depends_on: [namenode]
     ports: ["10000:10000"]
     environment:
       SERVICE_NAME: metastore
       HIVE_METASTORE_URI: thrift://hive-metastore:9083
     volumes:
       - ../scripts/hive_setup.sql:/opt/hive/scripts/hive_setup.sql
+      - agri_data_volume:/agri_data
     networks: [agri_net]
     restart: unless-stopped
 
@@ -68,7 +49,6 @@ services:
     ports: ["16010:16010", "9090:9090"]
     environment:
       HBASE_CONF_hbase_zookeeper_quorum: zookeeper
-      HBASE_CONF_hbase_master_port: 16000
     depends_on: [zookeeper]
     networks: [agri_net]
     restart: unless-stopped
@@ -95,6 +75,7 @@ services:
     volumes:
       - ../scripts:/opt/scripts
       - ../models:/opt/models
+      - agri_data_volume:/agri_data
     networks: [agri_net]
     restart: unless-stopped
 
@@ -107,6 +88,7 @@ services:
     depends_on: [spark-master]
     volumes:
       - ../scripts:/opt/scripts
+      - agri_data_volume:/agri_data
     networks: [agri_net]
     restart: unless-stopped
 
@@ -122,5 +104,6 @@ services:
     volumes:
       - ../dags:/opt/airflow/dags
       - ../scripts:/opt/airflow/scripts
+      - agri_data_volume:/agri_data
     networks: [agri_net]
     restart: unless-stopped
