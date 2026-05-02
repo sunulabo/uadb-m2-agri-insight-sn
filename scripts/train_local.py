@@ -1,46 +1,60 @@
 from pyspark.sql import SparkSession
-from pyspark.sql.functions import col
+from pyspark.sql.functions import col, sha2, concat, lit, when
 from pyspark.ml.feature import StringIndexer, VectorAssembler, StandardScaler
 from pyspark.ml.regression import RandomForestRegressor
 from pyspark.ml.evaluation import RegressionEvaluator
 from pyspark.ml import Pipeline
+import os
+import subprocess
+import glob
+
+SALT = os.environ.get('AGRI_SECRET_SALT', 'agri_default_salt_2025')
+print(f"🔐 Utilisation du sel pour anonymisation (longueur : {len(SALT)})")
 
 spark = SparkSession.builder.appName('AgriTrain').master('local[*]').getOrCreate()
+spark.sparkContext.setLogLevel('ERROR')
 
-# Chemin du fichier CSV (monté dans le conteneur)
-csv_path = '/home/jovyan/work/data/bronze/agri_parcelles_brut.csv'
+csv_path = 'data/bronze/agri_parcelles_brut.csv'
 df = spark.read.csv(csv_path, header=True, inferSchema=True)
+print(f"📊 Données brutes : {df.count()} lignes")
 
-print(f"📊 Données chargées : {df.count()} lignes")
+# --- Anonymisation SHA-256 (Privacy by Design) ---
+df = df.withColumn('plot_id_secure', sha2(concat(col('parcel_id'), lit(SALT)), 256)) \
+       .drop('parcel_id', 'producer_name')
+print(f"🔒 PII supprimées, anonymisation appliquée. Colonnes : {df.columns}")
 
-# Nettoyage (supprimer les lignes avec valeurs nulles)
-df = df.dropna()
-print(f"🧹 Après nettoyage : {df.count()} lignes")
+# --- Nettoyage (pas de colonne age) ---
+essential_cols = ['pluviometrie_annuelle', 'ph_sol', 'teneur_matiere_organique_pct', 'rendement_kg_ha']
+df = df.dropna(subset=essential_cols)
+print(f"🧹 Après suppression des NULL : {df.count()} lignes")
 
-# Feature engineering : stress hydrique
+# --- Feature engineering complet (3 features dérivées) ---
 df = df.withColumn('stress_hydrique', col('pluviometrie_annuelle') / 800)
 
-# Colonnes numériques et catégorielles
+df = df.withColumn('ph_optimal_score',
+    when((col('ph_sol') >= 6.0) & (col('ph_sol') <= 7.5), 1.0)
+    .when((col('ph_sol') >= 5.5) & (col('ph_sol') <= 8.0), 0.7)
+    .otherwise(0.3))
+
+df = df.withColumn('indice_fertilite', col('teneur_matiere_organique_pct') * col('ph_optimal_score'))
+print("✅ Features dérivées ajoutées : stress_hydrique, ph_optimal_score, indice_fertilite")
+
+# --- Préparation pour MLlib ---
 num_cols = [
     'ph_sol', 'pluviometrie_annuelle', 'temperature_moy_celsius',
     'humidite_relative_pct', 'teneur_matiere_organique_pct',
-    'surface_hectares', 'annee', 'stress_hydrique'
+    'surface_hectares', 'annee', 'stress_hydrique',
+    'ph_optimal_score', 'indice_fertilite'
 ]
 cat_cols = ['region', 'culture', 'type_sol']
 
-# Indexation des variables catégorielles
 indexers = [StringIndexer(inputCol=c, outputCol=c+'_idx', handleInvalid='skip') for c in cat_cols]
-
-# Assemblage des features
 assembler = VectorAssembler(
     inputCols=num_cols + [c+'_idx' for c in cat_cols],
-    outputCol='features'
+    outputCol='features',
+    handleInvalid='skip'
 )
-
-# Normalisation
 scaler = StandardScaler(inputCol='features', outputCol='scaled_features', withStd=True, withMean=True)
-
-# Modèle Random Forest
 rf = RandomForestRegressor(
     featuresCol='scaled_features',
     labelCol='rendement_kg_ha',
@@ -49,42 +63,36 @@ rf = RandomForestRegressor(
     seed=42
 )
 
-# Pipeline
 pipeline = Pipeline(stages=indexers + [assembler, scaler, rf])
 
-# Split train/test
 train, test = df.randomSplit([0.8, 0.2], seed=42)
-
-# Entraînement
-print("🚀 Entraînement du modèle...")
+print("🚀 Entraînement du modèle Random Forest...")
 model = pipeline.fit(train)
 
-# Prédictions sur le test
 predictions = model.transform(test)
-
-# Évaluation
 evaluator = RegressionEvaluator(labelCol='rendement_kg_ha', predictionCol='prediction')
 rmse = evaluator.evaluate(predictions, {evaluator.metricName: 'rmse'})
 r2 = evaluator.evaluate(predictions, {evaluator.metricName: 'r2'})
+print(f"\n📈 Performances : RMSE = {rmse:.2f} kg/ha, R² = {r2:.4f}")
 
-print(f"\n📈 Performances :")
-print(f"   ✅ RMSE : {rmse:.2f} kg/ha")
-print(f"   ✅ R²   : {r2:.4f}")
-
-# Sauvegarde du modèle
-model_path = '/home/jovyan/work/models/agri_model'
-model.write().overwrite().save(model_path)
-print(f"💾 Modèle sauvegardé : {model_path}")
-
-# Prédictions sur tout le jeu de données (pour les recommandations)
+# --- Prédictions enrichies ---
 full_pred = model.transform(df)
-full_pred.select('region', 'culture', 'type_sol', 'prediction', 'rendement_kg_ha') \
-         .show(10, truncate=False)
+pred_df = full_pred.select(
+    'plot_id_secure', 'region', 'culture', 'type_sol', 
+    'pluviometrie_annuelle', 'stress_hydrique', 'ph_optimal_score',
+    'indice_fertilite', 'prediction'
+)
 
-# Sauvegarde des prédictions en CSV (pour pouvoir les utiliser dans HBase/Hive plus tard)
-output_path = '/home/jovyan/work/data/silver/predictions.csv'
-full_pred.select('region', 'culture', 'type_sol', 'prediction') \
-         .write.mode('overwrite').option('header', 'true').csv(output_path)
-print(f"📁 Prédictions sauvegardées dans : {output_path}")
+output_dir = 'data/silver/predictions_enriched'
+pred_df.coalesce(1).write.mode('overwrite').option('header', 'true').csv(output_dir)
+
+# Déplacer le CSV unique
+csv_files = glob.glob(f'{output_dir}/*.csv')
+if csv_files:
+    subprocess.run(f'mv {csv_files[0]} data/silver/predictions_enriched.csv', shell=True)
+subprocess.run(f'rm -rf {output_dir}', shell=True)
+
+print(f"✅ Prédictions enrichies sauvegardées : data/silver/predictions_enriched.csv")
+print(f"   (contient {full_pred.count()} lignes avec features dérivées + anonymisation)")
 
 spark.stop()
