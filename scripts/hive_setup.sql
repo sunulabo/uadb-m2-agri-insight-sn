@@ -1,4 +1,7 @@
-CREATE DATABASE IF NOT EXISTS agri_insight COMMENT 'Pipeline Agri-Insight SN — UADB 2025-2026';
+CREATE DATABASE IF NOT EXISTS agri_insight 
+COMMENT 'Pipeline Agri-Insight SN — UADB 2025-2026'
+LOCATION 'hdfs://namenode:8020/user/hive/warehouse/agri_insight.db';
+
 USE agri_insight;
 -- ── BRONZE : données brutes ingérées par NiFi ───────────────────────────
 CREATE EXTERNAL TABLE IF NOT EXISTS parcelles_bronze (
@@ -11,11 +14,11 @@ CREATE EXTERNAL TABLE IF NOT EXISTS parcelles_bronze (
     pluviometrie_annuelle DOUBLE,
     temperature_moy_celsius DOUBLE,
     humidite_relative_pct DOUBLE,
-    teneur_matiere_organique_pct DOUBLE,
+    teneur_matiere_organique_pct DOUBLE, 
     surface_hectares DOUBLE,
     annee INT,
     rendement_kg_ha DOUBLE
-) ROW FORMAT DELIMITED FIELDS TERMINATED BY ',' STORED AS TEXTFILE LOCATION '/agri_insight/bronze/' TBLPROPERTIES ('skip.header.line.count' = '1');
+) ROW FORMAT DELIMITED FIELDS TERMINATED BY ',' STORED AS TEXTFILE LOCATION 'hdfs://namenode:8020/agri_insight/bronze/' TBLPROPERTIES ('skip.header.line.count' = '1');
 -- ── SILVER : données anonymisées + features dérivées ───────────────────
 CREATE TABLE IF NOT EXISTS parcelles_silver (
     plot_id_secure STRING COMMENT 'SHA-256 — jamais parcel_id brut',
