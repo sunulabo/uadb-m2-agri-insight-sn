@@ -1,0 +1,44 @@
+<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<template encoding-version="1.3">
+    <description>Flux d'ingestion Agri-Insight</description>
+    <groupId>ef3b2a4e-019d-1000-0000-000000000000</groupId>
+    <name>Agri_Ingestion_Template</name>
+    <snippet>
+        <processors>
+            <id>22345678-1234-1234-1234-123456789001</id>
+            <name>Get Agri CSV</name>
+            <type>org.apache.nifi.processors.standard.GetFile</type>
+            <config>
+                <properties>
+                    <entry><key>Input Directory</key><value>/data/bronze</value></entry>
+                    <entry><key>File Filter</key><value>agri_parcelles_brut.csv</value></entry>
+                    <entry><key>Keep Source File</key><value>true</value></entry>
+                </properties>
+            </config>
+        </processors>
+        <processors>
+            <id>22345678-1234-1234-1234-123456789002</id>
+            <name>Put to HDFS Bronze</name>
+            <type>org.apache.nifi.processors.hadoop.PutHDFS</type>
+            <config>
+                <properties>
+                    <entry><key>Hadoop Configuration Resources</key><value>/opt/hadoop/etc/hadoop/core-site.xml,/opt/hadoop/etc/hadoop/hdfs-site.xml</value></entry>
+                    <entry><key>Directory</key><value>/agri_insight/bronze</value></entry>
+                    <entry><key>Conflict Resolution Strategy</key><value>replace</value></entry>
+                </properties>
+            </config>
+        </processors>
+        <connections>
+            <id>22345678-1234-1234-1234-123456789003</id>
+            <source>
+                <id>22345678-1234-1234-1234-123456789001</id>
+                <type>PROCESSOR</type>
+            </source>
+            <destination>
+                <id>22345678-1234-1234-1234-123456789002</id>
+                <type>PROCESSOR</type>
+            </destination>
+            <selectedRelationships>success</selectedRelationships>
+        </connections>
+    </snippet>
+</template>
