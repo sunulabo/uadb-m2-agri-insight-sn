@@ -5,9 +5,15 @@ logger = logging.getLogger("HBaseSetup")
 
 def create_agri_tables():
     try:
-        # Utilisation de localhost car on est sur l'hôte Windows
-        conn = happybase.Connection("localhost", port=9090, timeout=10000)
-        conn.open()
+        # Essayer d'abord 'hbase' (si dans docker), puis 'localhost' (si sur l'hôte)
+        try:
+            conn = happybase.Connection("hbase", port=9090, timeout=10000)
+            conn.open()
+            logger.info("Connecté à HBase via le hostname 'hbase'")
+        except:
+            conn = happybase.Connection("localhost", port=9090, timeout=10000)
+            conn.open()
+            logger.info("Connecté à HBase via 'localhost'")
         
         # 1. Tentative de création du namespace 'agri'
         # On utilise le client thrift directement car happybase n'a pas toujours create_namespace
