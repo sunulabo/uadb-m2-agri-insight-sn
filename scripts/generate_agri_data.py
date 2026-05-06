@@ -105,7 +105,7 @@ def generate_parcelles(n_par_region: int = 100) -> pd.DataFrame:
     os.makedirs(output_dir, exist_ok=True)
     output_path = os.path.join(output_dir, "agri_parcelles_brut.csv")
     df.to_csv(output_path, index=False)
-    print(f"Généré : {len(df)} parcelles ✓")
+    print(f"Généré : {len(df)} parcelles OK")
     return df
 
 

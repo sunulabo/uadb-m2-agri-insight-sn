@@ -11,7 +11,7 @@ import os
 def generate_dashboard():
     try:
         conn = hive.Connection(
-            host="hive-metastore", port=10000, database="agri_insight"
+            host="localhost", port=10000, database="agri_insight"
         )
         # ── 1. Charger les recommandations ───────────────────────────────────────
         df = pd.read_sql(

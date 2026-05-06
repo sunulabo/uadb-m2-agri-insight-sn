@@ -1,112 +1,169 @@
 version: '3.8'
 services:
- zookeeper:
-  image: bitnamilegacy/zookeeper:3.8
-  container_name: zookeeper
-  environment:
-   ALLOW_ANONYMOUS_LOGIN: "yes"
-  networks: [agri_net]
- kafka:
-  image: bitnamilegacy/kafka:3.3
-  container_name: kafka
-  depends_on: [zookeeper]
-  ports: ["9092:9092"]
-  environment:
-   KAFKA_CFG_ZOOKEEPER_CONNECT: zookeeper:2181
-   KAFKA_CFG_ADVERTISED_LISTENERS: PLAINTEXT://kafka:9092
-   ALLOW_ANONYMOUS_LOGIN: "yes"
-   KAFKA_CFG_AUTO_CREATE_TOPICS_ENABLE: "true"
-  networks: [agri_net]
- nifi:
-  image: apache/nifi:1.14.0
-  container_name: nifi
-  ports: ["8081:8080"]
-  environment:
-   NIFI_WEB_HTTP_HOST: 0.0.0.0
-   NIFI_WEB_HTTP_PORT: 8080
-   NIFI_SENSITIVE_PROPS_KEY: "uadb_agri_secret_key_123"
-  volumes:
-   - ./data/bronze:/opt/nifi/data/bronze
-   - ./nifi_templates:/opt/nifi/nifi-current/conf/templates
-   - ./scripts:/opt/nifi/custom-scripts
-  networks: [agri_net]
- spark-master:
-  image: bitnamilegacy/spark:3.3
-  container_name: spark-master
-  environment:
-   SPARK_MODE: master
-   AGRI_SECRET_SALT: UADB_AGRI_2025
-  ports: ["8080:8080", "7077:7077"]
-  volumes:
-   - ./models:/opt/models
-   - ./scripts:/opt/scripts
-  networks: [agri_net]
- spark-worker:
-  image: bitnamilegacy/spark:3.3
-  container_name: spark-worker
-  depends_on: [spark-master]
-  environment:
-   SPARK_MODE: worker
-   SPARK_MASTER_URL: spark://spark-master:7077
-   AGRI_SECRET_SALT: UADB_AGRI_2025
-  networks: [agri_net]
- hbase:
-  image: harisekhon/hbase:2.1
-  container_name: hbase
-  ports: ["16010:16010", "9090:9090"]
-  volumes:
-   - hbase_data:/hbase-data
-  networks: [agri_net]
- hive-metastore:
-  image: apache/hive:3.1.3
-  container_name: hive-metastore
-  environment:
-   SERVICE_NAME: metastore
-   HIVE_CONF_hive_metastore_warehouse_dir: "hdfs://namenode:9000/user/hive/warehouse"
-   HIVE_CONF_fs_defaultFS: "hdfs://namenode:9000"
-   CORE_CONF_fs_defaultFS: "hdfs://namenode:9000"
-  volumes:
-   - ./scripts:/opt/hive/user-scripts
-  networks: [agri_net]
- hive-server:
-  image: apache/hive:3.1.3
-  container_name: hive-server
-  depends_on:
-   - hive-metastore
-  environment:
-   SERVICE_NAME: hiveserver2
-   HIVE_CONF_hive_metastore_warehouse_dir: "hdfs://namenode:9000/user/hive/warehouse"
-   HIVE_CONF_fs_defaultFS: "hdfs://namenode:9000"
-   CORE_CONF_fs_defaultFS: "hdfs://namenode:9000"
-   HIVE_CONF_hive_metastore_uris: "thrift://hive-metastore:9083"
-  ports:
-   - "10000:10000"
-   - "10002:10002"
-  volumes:
-   - ./scripts:/opt/hive/user-scripts
-  networks: [agri_net]
- airflow:
-  image: apache/airflow:2.7.3
-  container_name: airflow
-  command: standalone
-  ports: ["8082:8080"]
-  volumes:
-   - ./dags:/opt/airflow/dags
-   - ./models:/opt/airflow/models
-   - ./scripts:/opt/airflow/scripts
-  networks: [agri_net]
- namenode:
-  image: bde2020/hadoop-namenode:2.0.0-hadoop3.2.1-java8
-  container_name: namenode
-  ports: ["9870:9870", "9000:9000"]
-  environment:
-   CLUSTER_NAME: agri_cluster
-  volumes:
-   - ./data:/opt/hadoop/data
-  networks: [agri_net]
+  postgres:
+    image: postgres:13-alpine
+    container_name: postgres
+    environment:
+      POSTGRES_DB: metastore_db
+      POSTGRES_USER: hive
+      POSTGRES_PASSWORD: hive_password
+    networks:
+    - agri-net
+    volumes:
+    - ./data/metastore_db:/var/lib/postgresql/data
+  zookeeper:
+    image: bitnamilegacy/zookeeper:3.8
+    container_name: zookeeper
+    environment:
+      ALLOW_ANONYMOUS_LOGIN: 'yes'
+    networks:
+    - agri-net
+  kafka:
+    image: bitnamilegacy/kafka:3.3
+    container_name: kafka
+    depends_on:
+    - zookeeper
+    ports:
+    - 9092:9092
+    environment:
+      KAFKA_CFG_ZOOKEEPER_CONNECT: zookeeper:2181
+      KAFKA_CFG_ADVERTISED_LISTENERS: PLAINTEXT://kafka:9092
+      ALLOW_ANONYMOUS_LOGIN: 'yes'
+      KAFKA_CFG_AUTO_CREATE_TOPICS_ENABLE: 'true'
+    networks:
+    - agri-net
+  nifi:
+    image: apache/nifi:1.14.0
+    container_name: nifi
+    ports:
+    - 8081:8080
+    environment:
+      NIFI_WEB_HTTP_HOST: 0.0.0.0
+      NIFI_WEB_HTTP_PORT: 8080
+      NIFI_SENSITIVE_PROPS_KEY: uadb_agri_secret_key_123
+    volumes:
+    - ./data/bronze:/opt/nifi/data/bronze
+    - ./nifi_templates:/opt/nifi/nifi-current/conf/templates
+    - ./scripts:/opt/nifi/custom-scripts
+    networks:
+    - agri-net
+  spark-master:
+    image: bitnamilegacy/spark:3.3
+    container_name: spark-master
+    environment:
+      SPARK_MODE: master
+      AGRI_SECRET_SALT: UADB_AGRI_2025
+      SPARK_RPC_AUTHENTICATION_ENABLED: 'no'
+      SPARK_RPC_ENCRYPTION_ENABLED: 'no'
+      SPARK_LOCAL_STORAGE_ENCRYPTION_ENABLED: 'no'
+      SPARK_SSL_ENABLED: 'no'
+    ports:
+    - 8080:8080
+    - 7077:7077
+    volumes:
+    - ./scripts:/opt/scripts
+    - ./hive-site.xml:/opt/bitnami/spark/conf/hive-site.xml
+    networks:
+    - agri-net
+  spark-worker:
+    image: bitnamilegacy/spark:3.3
+    container_name: spark-worker
+    depends_on:
+    - spark-master
+    environment:
+      SPARK_MODE: worker
+      SPARK_MASTER_URL: spark://spark-master:7077
+      AGRI_SECRET_SALT: UADB_AGRI_2025
+    networks:
+    - agri-net
+  hbase:
+    image: harisekhon/hbase:2.1
+    container_name: hbase
+    ports:
+    - 16010:16010
+    - 9090:9090
+    volumes:
+    - hbase_data:/hbase-data
+    networks:
+    - agri-net
+  hive-metastore:
+    image: apache/hive:3.1.3
+    container_name: hive-metastore
+    depends_on:
+    - postgres
+    - namenode
+    environment:
+      SERVICE_NAME: metastore
+      DB_DRIVER: postgres
+      IS_RESUME: 'true'
+    volumes:
+    - ./scripts:/opt/hive/user-scripts
+    - ./hive-site.xml:/opt/hive/conf/hive-site.xml
+    links:
+    - postgres
+    - namenode
+    networks:
+    - agri-net
+  hive-server:
+    image: apache/hive:3.1.3
+    container_name: hive-server
+    depends_on:
+    - hive-metastore
+    environment:
+      SERVICE_NAME: hiveserver2
+      DB_DRIVER: postgres
+      IS_RESUME: 'true'
+    ports:
+    - 10000:10000
+    - 10002:10002
+    links:
+    - postgres
+    - hive-metastore
+    volumes:
+    - ./scripts:/opt/hive/user-scripts
+    - ./hive-site.xml:/opt/hive/conf/hive-site.xml
+    networks:
+    - agri-net
+  airflow:
+    image: apache/airflow:2.7.3
+    container_name: airflow
+    command: standalone
+    ports:
+    - 8082:8080
+    volumes:
+    - ./dags:/opt/airflow/dags
+    - ./models:/opt/airflow/models
+    - ./scripts:/opt/airflow/scripts
+    networks:
+    - agri-net
+  namenode:
+    image: bde2020/hadoop-namenode:2.0.0-hadoop3.2.1-java8
+    container_name: namenode
+    ports:
+    - 9870:9870
+    - 8020:8020
+    environment:
+      CLUSTER_NAME: agri_cluster
+      CORE_CONF_fs_defaultFS: hdfs://namenode:8020
+    volumes:
+    - ./data/namenode:/hadoop/dfs/name
+    networks:
+    - agri-net
+  datanode:
+    image: bde2020/hadoop-datanode:2.0.0-hadoop3.2.1-java8
+    container_name: datanode
+    depends_on:
+    - namenode
+    environment:
+      SERVICE_PRECONDITION: namenode:9870
+      CORE_CONF_fs_defaultFS: hdfs://namenode:8020
+    volumes:
+    - ./data/datanode:/hadoop/dfs/data
+    networks:
+    - agri-net
 volumes:
- hbase_data:
-  driver: local
+  hbase_data:
+    driver: local
 networks:
- agri_net:
-  driver: bridge
+  agri-net:
+    driver: bridge

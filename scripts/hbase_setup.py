@@ -14,7 +14,7 @@ def create_agri_tables():
         try:
             logger.info("Tentative de création du namespace 'agri'...")
             conn.create_namespace('agri')
-            logger.info("Namespace 'agri' créé ✓")
+            logger.info("Namespace 'agri' créé OK")
         except Exception as e:
             # Si l'erreur contient "AlreadyExists", c'est que c'est bon
             if "AlreadyExists" in str(e) or "NamespaceExistException" in str(e):
@@ -43,7 +43,7 @@ def create_agri_tables():
         for nom, fam in tables.items():
             if nom not in existantes:
                 conn.create_table(nom, fam)
-                logger.info(f"Table {nom} créée ✓")
+                logger.info(f"Table {nom} créée OK")
             else:
                 logger.info(f"Table {nom} déjà existante")
         

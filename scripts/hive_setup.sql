@@ -1,8 +1,13 @@
+SET hive.execution.engine=mr;
 CREATE DATABASE IF NOT EXISTS agri_insight 
 COMMENT 'Pipeline Agri-Insight SN — UADB 2025-2026'
 LOCATION 'hdfs://namenode:8020/user/hive/warehouse/agri_insight.db';
 
 USE agri_insight;
+
+DROP TABLE IF EXISTS predictions_gold;
+DROP TABLE IF EXISTS parcelles_silver;
+DROP TABLE IF EXISTS parcelles_bronze;
 -- ── BRONZE : données brutes ingérées par NiFi ───────────────────────────
 CREATE EXTERNAL TABLE IF NOT EXISTS parcelles_bronze (
     parcel_id STRING,

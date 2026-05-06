@@ -1,5 +1,5 @@
 pandas==2.2.3
-numpy==2.1.2
+numpy<2.0.0
 faker==30.1.0
 pandera==0.20.4
 matplotlib==3.7.3

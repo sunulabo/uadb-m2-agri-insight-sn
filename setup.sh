@@ -12,9 +12,9 @@ pip install -r requirements.txt
 
 # Démarrage infrastructure
 mkdir -p data/bronze data/silver data/gold nifi_templates dags models
-docker compose -f docker/docker-compose.yml up -d zookeeper && sleep 10
-docker compose -f docker/docker-compose.yml up -d kafka nifi hbase hive-metastore namenode && sleep 30
-docker compose -f docker/docker-compose.yml up -d spark-master spark-worker airflow
+docker compose -f docker-compose.yml up -d zookeeper && sleep 10
+docker compose -f docker-compose.yml up -d kafka nifi hbase hive-metastore namenode && sleep 30
+docker compose -f docker-compose.yml up -d spark-master spark-worker airflow
 
 # Initialiser HBase (une seule fois)
 python scripts/hbase_setup.py

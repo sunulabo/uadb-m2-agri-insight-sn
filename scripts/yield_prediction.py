@@ -23,70 +23,24 @@ parser.add_argument("--input-table", default="agri_insight.parcelles_silver")
 args = parser.parse_args()
 
 spark = (
-    SparkSession.builder.appName("AgriInsight_YieldPrediction")
-    .config("spark.sql.shuffle.partitions", "8")
+    SparkSession.builder.appName(f"AgriInsight_YieldPrediction_{args.mode}")
+    .config("spark.hadoop.hive.metastore.uris", "thrift://hive-metastore:9083")
+    .config("spark.sql.warehouse.dir", "hdfs://namenode:8020/user/hive/warehouse")
     .enableHiveSupport()
     .getOrCreate()
 )
 
 spark.sparkContext.setLogLevel("WARN")
 
-# ── Bronze → Silver : Privacy Layer ─────────────────────────────────────
-# Normalement on lit de Bronze, mais ici on simule la table Silver
-raw_df = spark.table(args.input_table)
+# ── Read from Silver ─────────────────────────────────────
+print("Tables in agri_insight:", [t.name for t in spark.catalog.listTables("agri_insight")])
+gold_df = spark.table(args.input_table)
 
-# CORRECTION : drop('parcel_id', 'producer_name') après anonymisation
-silver_df = raw_df.withColumn(
-    "plot_id_secure", sha2(concat(col("parcel_id"), lit(SALT)), 256)
-).drop(
-    "parcel_id", "producer_name"
-)  # Suppression OBLIGATOIRE des PII
-
-# ── Silver → Gold : Feature Engineering ─────────────────────────────────
-# Feature 1 : Indice de stress hydrique (pluvio vs besoin culture)
-BESOIN_PLUVIO = {
-    "Mil": 600.0,
-    "Riz": 1000.0,
-    "Arachide": 700.0,
-    "Manioc": 800.0,
-    "Niebe": 500.0,
-}
-bc_besoin = spark.sparkContext.broadcast(BESOIN_PLUVIO)
-
-from pyspark.sql.functions import udf
-from pyspark.sql.types import FloatType
-
-
-@udf(returnType=FloatType())
-def stress_hydrique(culture, pluvio):
-    """Ratio pluviométrie réelle / besoin théorique de la culture."""
-    besoin = bc_besoin.value.get(culture, 700.0)
-    return float(min(2.0, max(0.0, pluvio / besoin)))
-
-
-gold_df = (
-    silver_df
-    # Feature dérivée 1 : stress hydrique
-    .withColumn(
-        "stress_hydrique", stress_hydrique(col("culture"), col("pluviometrie_annuelle"))
-    )
-    # Feature dérivée 2 : pH optimal (1 = optimal, 0 = dégradé)
-    .withColumn(
-        "ph_optimal_score",
-        when((col("ph_sol") >= 6.0) & (col("ph_sol") <= 7.5), lit(1.0))
-        .when((col("ph_sol") >= 5.5) & (col("ph_sol") <= 8.0), lit(0.7))
-        .otherwise(lit(0.3)),
-    )
-    # Feature dérivée 3 : indice de fertilité composite
-    .withColumn(
-        "indice_fertilite",
-        col("teneur_matiere_organique_pct") * col("ph_optimal_score"),
-    )
-    # Protection contre les NULL résiduels
-    .withColumn(
-        "pluviometrie_annuelle", coalesce(col("pluviometrie_annuelle"), lit(600.0))
-    ).withColumn("rendement_kg_ha", coalesce(col("rendement_kg_ha"), lit(0.0)))
-)
+# Fill nulls for ML
+gold_df = gold_df.fillna({
+    "pluviometrie_annuelle": 600.0,
+    "rendement_kg_ha": 0.0
+})
 
 # ── Pipeline MLlib ───────────────────────────────────────────────────────
 NUM_COLS = [
