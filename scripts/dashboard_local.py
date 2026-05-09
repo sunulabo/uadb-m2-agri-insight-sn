@@ -36,7 +36,7 @@ def generate_dashboard_from_csv():
 
         plt.tight_layout()
         plt.savefig("dashboard_agri_insight_final.png")
-        print("✅ Dashboard généré avec succès : dashboard_agri_insight_final.png")
+        print("Dashboard généré avec succès : dashboard_agri_insight_final.png")
 
     except Exception as e:
         print(f"Erreur : {e}")
