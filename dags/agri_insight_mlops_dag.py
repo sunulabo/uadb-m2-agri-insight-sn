@@ -45,7 +45,7 @@ def retrain_model(**ctx):
     """Lance le réentraînement Spark via spark-submit."""
     result = subprocess.run([
         "spark-submit", "--master", "spark://spark-master:7077",
-        "/opt/airflow/scripts/yield_prediction.py",
+        "/opt/airflow/scripts/train_yield.py",
         "--mode", "train",
         "--input-table", "agri_insight.parcelles_silver",
     ], capture_output=True, text=True, timeout=3600)
@@ -61,7 +61,7 @@ def generate_recommendations(**ctx):
     # 1. Lancer inférence Spark
     subprocess.run([
         "spark-submit", "--master", "spark://spark-master:7077",
-        "/opt/airflow/scripts/yield_prediction.py",
+        "/opt/airflow/scripts/train_yield.py",
         "--mode", "infer",
     ], check=True, timeout=1800)
     # 2. Écrire les recommandations dans HBase

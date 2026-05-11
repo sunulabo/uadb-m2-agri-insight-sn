@@ -10,7 +10,7 @@ services:
     networks:
     - agri-net
     volumes:
-    - ./data/metastore_db:/var/lib/postgresql/data
+    - ../data/metastore_db:/var/lib/postgresql/data
   zookeeper:
     image: bitnamilegacy/zookeeper:3.8
     container_name: zookeeper
@@ -42,9 +42,9 @@ services:
       NIFI_WEB_HTTP_PORT: 8080
       NIFI_SENSITIVE_PROPS_KEY: uadb_agri_secret_key_123
     volumes:
-    - ./data/bronze:/opt/nifi/data/bronze
-    - ./nifi_templates:/opt/nifi/nifi-current/conf/templates
-    - ./scripts:/opt/nifi/custom-scripts
+    - ../data/bronze:/opt/nifi/data/bronze
+    - ../nifi_templates:/opt/nifi/nifi-current/conf/templates
+    - ../scripts:/opt/nifi/custom-scripts
     networks:
     - agri-net
   spark-master:
@@ -61,7 +61,7 @@ services:
     - 8080:8080
     - 7077:7077
     volumes:
-    - ./scripts:/opt/scripts
+    - ../scripts:/opt/scripts
     - ./hive-site.xml:/opt/bitnami/spark/conf/hive-site.xml
     networks:
     - agri-net
@@ -97,7 +97,7 @@ services:
       DB_DRIVER: postgres
       IS_RESUME: 'true'
     volumes:
-    - ./scripts:/opt/hive/user-scripts
+    - ../scripts:/opt/hive/user-scripts
     - ./hive-site.xml:/opt/hive/conf/hive-site.xml
     links:
     - postgres
@@ -120,7 +120,7 @@ services:
     - postgres
     - hive-metastore
     volumes:
-    - ./scripts:/opt/hive/user-scripts
+    - ../scripts:/opt/hive/user-scripts
     - ./hive-site.xml:/opt/hive/conf/hive-site.xml
     networks:
     - agri-net
@@ -131,9 +131,9 @@ services:
     ports:
     - 8082:8080
     volumes:
-    - ./dags:/opt/airflow/dags
-    - ./models:/opt/airflow/models
-    - ./scripts:/opt/airflow/scripts
+    - ../dags:/opt/airflow/dags
+    - ../models:/opt/airflow/models
+    - ../scripts:/opt/airflow/scripts
     networks:
     - agri-net
   namenode:
@@ -146,7 +146,7 @@ services:
       CLUSTER_NAME: agri_cluster
       CORE_CONF_fs_defaultFS: hdfs://namenode:8020
     volumes:
-    - ./data/namenode:/hadoop/dfs/name
+    - ../data/namenode:/hadoop/dfs/name
     networks:
     - agri-net
   datanode:
@@ -158,7 +158,7 @@ services:
       SERVICE_PRECONDITION: namenode:9870
       CORE_CONF_fs_defaultFS: hdfs://namenode:8020
     volumes:
-    - ./data/datanode:/hadoop/dfs/data
+    - ../data/datanode:/hadoop/dfs/data
     networks:
     - agri-net
 volumes:
